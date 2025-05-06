@@ -7,7 +7,7 @@
 # 选项 2: 只启用 Vertex AI API (推荐，功能更全)
 APIS_TO_ENABLE="aiplatform.googleapis.com"
 # 选项 3: 同时启用两者 (如果需要)
-# APIS_TO_ENABLE="generativelanguage.googleapis.com aiplatform.googleapis.com"
+# APIS_TO_ENABLE="generativelanguage.googleapis.com"
 
 # --- 身份验证和权限检查提示 ---
 echo "=================================================================="
