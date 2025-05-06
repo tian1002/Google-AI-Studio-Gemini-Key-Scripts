@@ -3,9 +3,9 @@
 # --- 配置 ---
 # !! 重要：请根据你的需求修改或确认要启用的 API 服务名称 !!
 # 选项 1: 只启用 Generative Language API
-# APIS_TO_ENABLE="generativelanguage.googleapis.com"
+APIS_TO_ENABLE="generativelanguage.googleapis.com"
 # 选项 2: 只启用 Vertex AI API (推荐，功能更全)
-APIS_TO_ENABLE="aiplatform.googleapis.com"
+#APIS_TO_ENABLE="aiplatform.googleapis.com"
 # 选项 3: 同时启用两者 (如果需要)
 # APIS_TO_ENABLE="generativelanguage.googleapis.com"
 
