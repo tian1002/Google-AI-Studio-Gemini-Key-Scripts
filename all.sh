@@ -7,30 +7,35 @@ create_gcp_projects() {
   echo "--- 开始执行 GCP 项目创建脚本 ---"
   echo ""
 
-  # --- 变量定义 (来自您提供的脚本) ---
+  # --- 变量定义 ---
 
-  # 1. 自动生成项目 ID 的前缀 (1个小写字母 + 9个小写字母或数字)
-  #    确保符合规则: 小写字母开头, 字母/数字/连字符, 6-30字符
+  # 1. 自动生成项目 ID 的前缀
   FIRST_CHAR=$(head /dev/urandom | tr -dc 'a-z' | head -c 1)
   REST_CHARS=$(head /dev/urandom | tr -dc 'a-z0-9' | head -c 9)
   PROJECT_ID_PREFIX="${FIRST_CHAR}${REST_CHARS}"
   echo "本次运行将使用的随机项目 ID 前缀: ${PROJECT_ID_PREFIX}"
 
-  # 2. 自动获取你的数字组织 ID
+  # 2. 尝试自动获取你的数字组织 ID
   echo "正在尝试自动获取组织 ID..."
   ORGANIZATION_ID=$(gcloud organizations list --format="value(ID)" --limit=1 2>/dev/null)
+  PARENT_RESOURCE="" # 初始化 PARENT_RESOURCE
 
   if [[ -z "$ORGANIZATION_ID" ]]; then
-    echo "错误：无法自动获取组织 ID。"
-    echo "请确保您已使用 'gcloud auth login' 和 'gcloud auth application-default login' 登录，"
-    echo "并且您的账户有权列出组织。或者，请在脚本中手动设置 ORGANIZATION_ID。"
-    echo "项目创建中止。"
-    return 1 # 返回到主菜单
+    echo "信息：无法自动获取组织 ID。这可能是因为您的账户不属于任何组织，或者权限不足。"
+    read -p "您想在没有组织的情况下继续创建项目吗？项目将直接在您的账户下创建。(yes/no): " CONFIRM_NO_ORG
+    if [[ "$CONFIRM_NO_ORG" == "yes" ]]; then
+      echo "将在没有组织的情况下创建项目。"
+      PARENT_RESOURCE="" # 明确设置为空，gcloud 会在用户账户下创建
+    else
+      echo "项目创建已取消，因为未指定组织且用户选择不继续。"
+      return 1 # 返回到主菜单
+    fi
   else
     echo "成功获取组织 ID: ${ORGANIZATION_ID}"
+    PARENT_RESOURCE="--organization=${ORGANIZATION_ID}"
   fi
 
-  # 3. (可选) 设置你的结算账号 ID (格式: 012345-67890A-BCDEF1)
+  # 3. (可选) 设置你的结算账号 ID
   BILLING_ACCOUNT_ID="YOUR_BILLING_ACCOUNT_ID" # <--- 如果需要，请修改这里
 
   # 4. 运行时询问要创建的项目数量
@@ -43,15 +48,17 @@ create_gcp_projects() {
     fi
   done
 
-  PARENT_RESOURCE="--organization=${ORGANIZATION_ID}"
-  # 如果你想在文件夹下创建，请取消注释下一行并设置 FOLDER_ID
-  # FOLDER_ID="YOUR_FOLDER_ID"
-  # PARENT_RESOURCE="--folder=${FOLDER_ID}"
-  # if [[ "$PARENT_RESOURCE" == "--folder=YOUR_FOLDER_ID" && "$FOLDER_ID" == "YOUR_FOLDER_ID" ]]; then
-  #   echo "错误：如果您选择在文件夹下创建项目，请设置有效的 FOLDER_ID。"
-  #   echo "项目创建中止。"
-  #   return 1
+  # 如果用户想在文件夹下创建 (需要组织ID有效或用户手动提供文件夹ID)
+  # 注意: 如果 ORGANIZATION_ID 为空，但用户想用 FOLDER_ID，需要确保 FOLDER_ID 是有效的
+  # FOLDER_ID="YOUR_FOLDER_ID" # <--- 如果使用文件夹，请设置这里
+  # if [[ -n "$FOLDER_ID" && "$FOLDER_ID" != "YOUR_FOLDER_ID" ]]; then
+  #   echo "将使用文件夹 ID: $FOLDER_ID 创建项目。"
+  #   PARENT_RESOURCE="--folder=${FOLDER_ID}"
+  # elif [[ "$PARENT_RESOURCE" == "--folder=YOUR_FOLDER_ID" && "$FOLDER_ID" == "YOUR_FOLDER_ID" && -n "$ORGANIZATION_ID" ]]; then
+  #   echo "警告：配置了在文件夹下创建项目，但 FOLDER_ID 未被有效设置。将退回使用组织 ID。"
+  #   PARENT_RESOURCE="--organization=${ORGANIZATION_ID}"
   # fi
+
 
   LINK_BILLING=false
   if [[ -n "$BILLING_ACCOUNT_ID" && "$BILLING_ACCOUNT_ID" != "YOUR_BILLING_ACCOUNT_ID" ]]; then
@@ -61,7 +68,11 @@ create_gcp_projects() {
       echo "未配置有效的结算账号 ID，将跳过自动链接步骤。"
   fi
 
-  echo "准备创建 ${NUM_PROJECTS} 个项目，前缀为 '${PROJECT_ID_PREFIX}'，父资源为 '${PARENT_RESOURCE}'..."
+  if [[ -z "$PARENT_RESOURCE" ]]; then
+    echo "准备创建 ${NUM_PROJECTS} 个项目，前缀为 '${PROJECT_ID_PREFIX}' (无父级组织/文件夹)..."
+  else
+    echo "准备创建 ${NUM_PROJECTS} 个项目，前缀为 '${PROJECT_ID_PREFIX}'，父资源为 '${PARENT_RESOURCE}'..."
+  fi
   echo "-----------------------------------------------------"
 
   for i in $(seq 1 ${NUM_PROJECTS})
@@ -73,7 +84,15 @@ create_gcp_projects() {
     echo ""
     echo "--> 正在创建项目 #${i} (总共 ${NUM_PROJECTS} 个): ${FULL_PROJECT_ID} ..."
 
-    if gcloud projects create ${FULL_PROJECT_ID} ${PARENT_RESOURCE} --name="${FULL_PROJECT_ID}-friendly-name"; then
+    # 根据 PARENT_RESOURCE 是否为空来调整命令
+    if [[ -z "$PARENT_RESOURCE" ]]; then
+        COMMAND_CREATE="gcloud projects create ${FULL_PROJECT_ID} --name=\"${FULL_PROJECT_ID}-friendly-name\""
+    else
+        COMMAND_CREATE="gcloud projects create ${FULL_PROJECT_ID} ${PARENT_RESOURCE} --name=\"${FULL_PROJECT_ID}-friendly-name\""
+    fi
+
+    echo "    执行命令: $COMMAND_CREATE" # 调试输出创建命令
+    if eval $COMMAND_CREATE; then
       echo "    项目 ${FULL_PROJECT_ID} 创建成功。"
       if ${LINK_BILLING}; then
         echo "    正在链接结算账号 ${BILLING_ACCOUNT_ID} 到 ${FULL_PROJECT_ID}..."
@@ -411,7 +430,7 @@ do
   echo "============================"
   echo " 1. 创建 GCP 项目"
   echo " 2. 创建 API Key"
-  echo " 3. 启用 API" # 更新了名称
+  echo " 3. 启用 API"
   echo " 4. 退出"
   echo "============================"
 
