@@ -254,6 +254,8 @@ create_api_keys() {
               KEY_NAME_OPT1=$(echo "$KEY_OUTPUT_OPT1" | jq -r '.name')
               KEY_UID_OPT1=$(echo "$KEY_OUTPUT_OPT1" | jq -r '.uid')
               echo "    成功：密钥已创建。资源名: $KEY_NAME_OPT1"
+              echo "    (+) 等待5秒确保密钥创建完成..." # <--- 修改点：增加日志
+              sleep 5                               # <--- 修改点：增加延迟
 
               echo "  步骤 2: 尝试应用 API 限制..."
               UPDATE_OUTPUT_OPT1=$(gcloud services api-keys update "$KEY_NAME_OPT1" --project="$PROJECT_ID" --add-api-target="service=$TARGET_API_SERVICE" --format="json" 2>&1)
@@ -265,6 +267,8 @@ create_api_keys() {
               else
                   RESTRICTION_STATUS_OPT1="成功"
                   echo "    成功：已应用 API 限制 '$TARGET_API_SERVICE'。"
+                  echo "    (+) 等待5秒确保限制应用完成..." # <--- 修改点：增加日志
+                  sleep 5                               # <--- 修改点：增加延迟
               fi
               ((CREATED_COUNT++))
 
