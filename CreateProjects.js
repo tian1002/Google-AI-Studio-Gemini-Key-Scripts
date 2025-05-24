@@ -31,7 +31,7 @@
 (async function runAiStudioProjectCreatorConsoleSilentColorOpt() {
 
     // --- 配置 ---
-    const TARGET_PROJECT_CREATIONS = 5;
+    const TARGET_PROJECT_CREATIONS = 10;
     const DELAY_BETWEEN_ATTEMPTS = 5000;
     const DELAY_AFTER_ERROR_REFRESH = 3000;
     const MAX_AUTO_REFRESH_ON_ERROR = 5;
